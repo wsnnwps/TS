@@ -1,0 +1,43 @@
+library(RODBC)
+library(dplyr)
+library(forecast)
+library(dataiku)
+library(fpp2)
+library(xts)
+
+dbhandle <- odbcDriverConnect('driver={SQL Server};server=ent-rpts;database=sandbox;trusted_connection=true')
+TOC <- sqlQuery(dbhandle, 'Select * from [SandBox].[NanNa].[ForecastTOCBusiness] ORDER BY Rownumber')
+head(TOC)
+
+h = 78
+Rundate = "05/31/2024"
+tech_ops_center_codes = c(1, 10)
+
+all_forecasts = data.frame()
+
+for (code in tech_ops_center_codes) {
+  data1 <- subset(TOC %>% filter(TechOpsCenterCode == code, Rownumber < h), select = c("TTL"))
+  data1TS <- ts(data1, frequency = 12, start = c(2018, 1))
+  m_aaTS = auto.arima(data1TS)
+  
+  rss <- sum((fitted(m_aaTS) - data1TS) ^ 2)  # residual sum of squares
+  tss <- sum((data1TS - mean(data1TS)) ^ 2)  # total sum of squares
+  Rsq <- 1 - rss / tss
+  
+  f_aa11 = forecast(m_aaTS, h = 36)
+  last_date = time(data1TS)[length(data1TS)]
+  forecast_df = data.frame(
+    Predicted = as.numeric(f_aa11$mean),
+    TOC = code,
+    Rundate = Rundate,
+    Rsq = Rsq,
+    date = last_date + seq(1/12, 3, by = 1/12)
+  )
+  forecast_df = forecast_df %>%
+    mutate(Forecast_year = floor(date)) %>%
+    mutate(Forecast_month = round(((date %% 1) * 12) + 1))
+  
+  all_forecasts = bind_rows(all_forecasts, forecast_df)
+}
+
+sqlSave(dbhandle, all_forecasts, tablename = "nanna.TOCForecastBusiness36")
