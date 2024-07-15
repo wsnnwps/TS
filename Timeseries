@@ -1,0 +1,66 @@
+import pyodbc
+import pandas as pd
+import numpy as np
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from datetime import datetime, timedelta
+
+# Database connection
+conn_str = (
+    r'DRIVER={SQL Server};'
+    r'SERVER=ent-rpts;'
+    r'DATABASE=sandbox;'
+    r'Trusted_Connection=yes;'
+)
+conn = pyodbc.connect(conn_str)
+query = 'SELECT * FROM [SandBox].[NanNa].[ForecastTOCBusiness] ORDER BY Rownumber'
+TOC = pd.read_sql(query, conn)
+
+# Parameters
+h = 78
+Rundate = "05/31/2024"
+Rundate_datetime = datetime.strptime(Rundate, "%m/%d/%Y")
+
+# Forecast function
+def forecast_toc(tech_ops_center_code):
+    data1 = TOC[(TOC['TechOpsCenterCode'] == tech_ops_center_code) & (TOC['Rownumber'] < h)][['TTL']]
+    data1TS = data1['TTL'].values
+    index = pd.date_range(start='2018-01-01', periods=len(data1TS), freq='MS')
+    data1TS = pd.Series(data1TS, index=index)
+    
+    model = SARIMAX(data1TS, order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+    results = model.fit(disp=False)
+    
+    rss = np.sum((results.fittedvalues - data1TS) ** 2)
+    tss = np.sum((data1TS - np.mean(data1TS)) ** 2)
+    Rsq = 1 - rss / tss
+    
+    forecast = results.get_forecast(steps=36)
+    forecast_index = pd.date_range(start=data1TS.index[-1] + timedelta(days=30), periods=36, freq='MS')
+    forecast_df = pd.DataFrame({
+        'Predicted': forecast.predicted_mean,
+        'TOC': tech_ops_center_code,
+        'Rundate': Rundate_datetime,
+        'Rsq': Rsq,
+        'date': forecast_index
+    })
+    forecast_df['Forecast_year'] = forecast_df['date'].dt.year
+    forecast_df['Forecast_month'] = forecast_df['date'].dt.month
+    
+    return forecast_df
+
+# List of TechOpsCenterCode values to process
+tech_ops_center_codes = [1, 10]
+
+# Combine results
+all_forecasts = pd.concat([forecast_toc(code) for code in tech_ops_center_codes], ignore_index=True)
+
+# Save results back to database
+cursor = conn.cursor()
+for index, row in all_forecasts.iterrows():
+    cursor.execute(
+        "INSERT INTO [nanna].[TOCForecastBusiness36] (Predicted, TOC, Rundate, Rsq, date, Forecast_year, Forecast_month) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        row['Predicted'], row['TOC'], row['Rundate'], row['Rsq'], row['date'], row['Forecast_year'], row['Forecast_month']
+    )
+conn.commit()
+cursor.close()
+conn.close()
