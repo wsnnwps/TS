@@ -38,3 +38,15 @@ plt.figure(figsize=(10, 5))
 plt.plot(train, label='Training Data')
 plt.plot(test, label='Test Data')
 plt.plot(forecast_df, label='Forecast
+
+
+# Plot the results
+plt.figure(figsize=(10, 5))
+plt.plot(train, label='Training Data')
+plt.plot(test, label='Test Data')
+plt.plot(forecast_df, label='Forecast', color='red')
+plt.fill_between(forecast_df.index,
+                 conf_int[:, 0],
+                 conf_int[:, 1], color='pink', alpha=0.3)
+plt.legend()
+plt.show()
