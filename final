@@ -1,0 +1,6 @@
+# Reset index for the final DataFrame
+forecast_results.reset_index(drop=True, inplace=True)
+
+# Display or save the final forecast results
+print(forecast_results)
+# forecast_results.to_csv('forecast_results.csv', index=False)
