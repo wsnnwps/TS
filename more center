@@ -1,0 +1,36 @@
+import pandas as pd
+from pandas.api.types import is_string_dtype, is_numeric_dtype
+import db_connect as db
+from pmdarima import auto_arima
+
+# Display settings for Jupyter notebook
+pd.set_option('display.width', 1000)  
+pd.set_option('display.max_rows', 50) 
+pd.set_option('display.max_columns', 50)
+
+# Query database and load results into a dataframe
+query = 'SELECT * FROM [SandBox].[NanNa].[ForecastTOCBusinessPython2]'  # Query the SandBox table
+TOC = db.query_database(query, chunksize=10000)  # Put query results into dataframe
+TOC['Date'] = pd.to_datetime(TOC['Date'])
+TOC.set_index('Date', inplace=True)
+
+# Loop through each unique center
+centers = TOC['Center'].unique()
+for center in centers:
+    # Filter the DataFrame for the current center
+    center_data = TOC[TOC['Center'] == center]
+    
+    # Check if 'TTL' column exists and is numeric
+    if 'TTL' in center_data.columns and is_numeric_dtype(center_data['TTL']):
+        # Fit the model
+        model = auto_arima(center_data['TTL'], seasonal=True, m=12)
+        # Summary of the model
+        print(f"Center: {center}")
+        print(model.summary())
+
+        # Forecast
+        forecast = model.predict(steps=36)
+        print(f"Forecast for {center}:")
+        print(forecast)
+    else:
+        print(f"Center: {center} does not have a numeric 'TTL' column or 'TTL' column is missing.")
