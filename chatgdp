@@ -1,0 +1,46 @@
+import pandas as pd
+import numpy as np
+from pmdarima import auto_arima
+from datetime import timedelta
+
+# Forecast function
+def forecast_toc(TOC, tech_ops_center_code, data1TS, Rundate_datetime, h):
+    # Ensure 'TechOpsCenterCode' is treated as a string
+    TOC['TechOpsCenterCode'] = TOC['TechOpsCenterCode'].astype(str)
+    TOC_filtered = TOC[(TOC['TechOpsCenterCode'] == tech_ops_center_code) & (TOC['Rownumber'] < h)][['TTL']]
+    TOC_values = TOC_filtered['TTL'].values
+    index = pd.date_range(start='2018-01-01', periods=len(TOC_values), freq='MS')
+    TOC_series = pd.Series(TOC_values, index=index)
+    
+    # Model fitting
+    model = auto_arima(TOC_series, trace=True, error_action='ignore', suppress_warnings=True)
+    results = model.fit(TOC_series)
+
+    # Calculate R-squared
+    rss = np.sum((results.fittedvalues - data1TS) ** 2)
+    tss = np.sum((data1TS - np.mean(data1TS)) ** 2)
+    Rsq = 1 - rss / tss
+    
+    # Forecast
+    forecast = results.get_forecast(steps=36)
+    forecast_index = pd.date_range(start=data1TS.index[-1] + timedelta(days=30), periods=36, freq='MS')
+    forecast_df = pd.DataFrame({
+        'Predicted': forecast.predicted_mean,
+        'TOC': tech_ops_center_code,
+        'Rundate': Rundate_datetime,
+        'Rsq': Rsq,
+        'date': forecast_index
+    })
+    forecast_df['Forecast_year'] = forecast_df['date'].dt.year
+    forecast_df['Forecast_month'] = forecast_df['date'].dt.month
+    
+    return forecast_df
+
+
+
+TOC = pd.read_csv('path_to_your_toc_data.csv')
+data1TS = pd.read_csv('path_to_your_data1TS.csv', index_col='date', parse_dates=True)
+Rundate_datetime = pd.to_datetime('2024-08-05')
+h = 10
+
+forecast_df = forecast_toc(TOC, 'your_tech_ops_center_code', data1TS, Rundate_datetime, h)
