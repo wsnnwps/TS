@@ -1,0 +1,40 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import pmdarima as pm
+from pmdarima import model_selection
+
+# Create the dataset
+data = {
+    '20180101': 2243,
+    '20180201': 1894,
+    '20180301': 2403,
+    '20180401': 1894,
+    '20180501': 2215
+}
+
+# Convert the dataset into a DataFrame
+df = pd.DataFrame(list(data.items()), columns=['Date', 'Value'])
+df['Date'] = pd.to_datetime(df['Date'], format='%Y%m%d')
+df.set_index('Date', inplace=True)
+
+# Split the data into training and test sets
+train, test = model_selection.train_test_split(df, train_size=0.8)
+
+# Fit the Auto ARIMA model
+model = pm.auto_arima(train, seasonal=False, stepwise=True)
+
+# Print the model summary
+print(model.summary())
+
+# Make predictions
+n_periods = len(test)
+forecast, conf_int = model.predict(n_periods=n_periods, return_conf_int=True)
+
+# Create a DataFrame for the forecast
+forecast_df = pd.DataFrame(forecast, index=test.index, columns=['Forecast'])
+
+# Plot the results
+plt.figure(figsize=(10, 5))
+plt.plot(train, label='Training Data')
+plt.plot(test, label='Test Data')
+plt.plot(forecast_df, label='Forecast
