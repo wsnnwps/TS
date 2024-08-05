@@ -1,3 +1,46 @@
+import pandas as pd
+from pandas.api.types import is_numeric_dtype
+import db_connect as db
+from pmdarima import auto_arima
+
+# Display settings for Jupyter notebook
+pd.set_option('display.width', 1000)  
+pd.set_option('display.max_rows', 50) 
+pd.set_option('display.max_columns', 50)
+
+# Query database and load results into a dataframe
+query = 'SELECT * FROM [SandBox].[NanNa].[ForecastTOCBusinessPython2]'  # Query the SandBox table
+TOC = db.query_database(query, chunksize=10000)  # Put query results into dataframe
+TOC['Date'] = pd.to_datetime(TOC['Date'])
+TOC.set_index('Date', inplace=True)
+
+# Create an empty DataFrame to store results
+forecast_results = pd.DataFrame()
+
+# Loop through each unique center
+centers = TOC['Center'].unique()
+for center in centers:
+    # Filter the DataFrame for the current center
+    center_data = TOC[TOC['Center'] == center]
+    
+    # Check if 'TTL' column exists and is numeric
+    if 'TTL' in center_data.columns and is_numeric_dtype(center_data['TTL']):
+        # Fit the model
+        model = auto_arima(center_data['TTL'], seasonal=True, m=12)
+        
+        # Forecast
+        forecast = model.predict(steps=36)
+        
+        # Create a DataFrame with the forecast results
+        forecast_df = pd.DataFrame(forecast, columns=['Forecast'])
+        forecast_df['Date'] = pd.date_range(start=center_data.index.max() + pd.DateOffset(1), periods=36, freq='M')
+        forecast_df['Center'] = center
+        
+        # Append to the main results DataFrame
+        forecast_results = pd.concat([forecast_results, forecast_df], ignore_index=True)
+    else:
+        print(f"Center: {center} does not have a numeric 'TTL' column or 'TTL' column is missing.")
+
 # Reset index for the final DataFrame
 forecast_results.reset_index(drop=True, inplace=True)
 
