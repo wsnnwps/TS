@@ -1,0 +1,25 @@
+import pandas as pd
+from pandas.api.types import is_string_dtype
+from pandas.api.types import is_numeric_dtype
+import db_connect as db
+
+# Display settings for Jupyter notebook
+pd.set_option('display.width', 1000)  
+pd.set_option('display.max_rows', 50) 
+pd.set_option('display.max_columns', 50)
+
+# Query database and load results into a dataframe
+query = 'SELECT * FROM [SandBox].[NanNa].[ForecastTOCBusinessPython2]'  # Query the SandBox table
+TOC = db.query_database(query, chunksize=10000)  # Put query results into dataframe
+TOC['Date'] = pd.to_datetime(TOC['Date'])
+TOC.set_index('Date', inplace=True)
+
+
+from pmdarima import auto_arima
+# Fit the model
+model = auto_arima(TOC['TTL'], seasonal=True, m=12)
+# Summary of the model
+print(model.summary())
+
+forecast = model.predict(steps=36)
+print(forecast)
