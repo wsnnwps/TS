@@ -1,0 +1,33 @@
+# Forecast function
+def forecast_toc(tech_ops_center_code):
+    global TOC 
+    # Ensure 'TechOpsCenterCode' is treated as a string
+    TOC['TechOpsCenterCode'] = TOC['TechOpsCenterCode'].astype(str)
+    TOC = TOC[(TOC['TechOpsCenterCode'] == tech_ops_center_code) & (TOC['Rownumber'] < h)][['TTL']]
+    TOC = TOC['TTL'].values
+    index = pd.date_range(start='2018-01-01', periods=len(TOC), freq='MS')
+    TOC = pd.Series(TOC, index=index)
+    
+    #model = SARIMAX(data1TS, order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+    #model =auto_arima(data1TS, trace=True, error_action='ignore', suppress_warnings=True)
+    #results = model.fit(disp=False)
+    model = auto_arima(TOC, trace=True, error_action='ignore', suppress_warnings=True)
+    results = model.fit(disp=False)
+
+    rss = np.sum((results.fittedvalues - data1TS) ** 2)
+    tss = np.sum((data1TS - np.mean(data1TS)) ** 2)
+    Rsq = 1 - rss / tss
+    
+    forecast = results.get_forecast(steps=36)
+    forecast_index = pd.date_range(start=data1TS.index[-1] + timedelta(days=30), periods=36, freq='MS')
+    forecast_df = pd.DataFrame({
+        'Predicted': forecast.predicted_mean,
+        'TOC': tech_ops_center_code,
+        'Rundate': Rundate_datetime,
+        'Rsq': Rsq,
+        'date': forecast_index
+    })
+    forecast_df['Forecast_year'] = forecast_df['date'].dt.year
+    forecast_df['Forecast_month'] = forecast_df['date'].dt.month
+    
+    return forecast_df
