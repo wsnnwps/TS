@@ -1,0 +1,48 @@
+import pandas as pd
+from pandas.api.types import is_string_dtype, is_numeric_dtype
+import db_connect as db
+from pmdarima import auto_arima
+
+# Display settings for Jupyter notebook
+pd.set_option('display.width', 1000)  
+pd.set_option('display.max_rows', 50) 
+pd.set_option('display.max_columns', 50)
+
+# Query database and load results into a dataframe
+query = 'SELECT * FROM [SandBox].[NanNa].[ForecastTOCBusinessPythonCenters] ORDER BY TechOpsCenterCode,Rownumber'  # Query the SandBox table
+TOC = db.query_database(query, chunksize=10000)  # Put query results into dataframe
+TOC['Date'] = pd.to_datetime(TOC['Date'])
+TOC.set_index('Date', inplace=True)
+
+# Loop through each unique center
+TechOpsCenterCode = TOC['TechOpsCenterCode'].unique()
+for TechOpsCenterCode in TechOpsCenterCode:
+    # Filter the DataFrame for the current center
+    center_data = TOC[TOC['TechOpsCenterCode'] == TechOpsCenterCode]
+    
+    # Check if 'TTL' column exists and is numeric
+    if 'TTL' in center_data.columns and is_numeric_dtype(center_data['TTL']):
+        # Fit the model
+        model = auto_arima(center_data['TTL'], seasonal=True, m=12)
+        # Summary of the model
+        #print(f"TechOpsCenterCode: {TechOpsCenterCode}")
+        #print(model.summary())
+
+        # Forecast
+        forecast = model.predict(steps=36)
+        last_date=center_data.index.max()
+        forecast_dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=10, freq='M')
+        forecast_df = pd.DataFrame(forecast, forecast_dates,columns=['Forecast'])
+        #forecast_results.reset_index(drop=True, inplace=True)
+        forecast_df['TechOpsCenterCode'] = TechOpsCenterCode        
+        # Append to the main results DataFrame
+        forecast_results = pd.concat([forecast_df], ignore_index=True)
+        
+        #print(f"Forecast for {TechOpsCenterCode}:")
+        print(forecast_results)
+    else:
+        print(f"Center: {TechOpsCenterCode} does not have a numeric 'TTL' column or 'TTL' column is missing.")
+
+
+
+
